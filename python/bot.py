@@ -12,7 +12,7 @@ class Bot:
         self.InitialSpawnPos = (-1, -1)
         self.currentProd = 0
         
-    def getNextLandToCapture(self, game_message, team_id, my_team):
+    def getNextLandToCapture(self, game_message, team_id, my_team, ownership_grid, my_team_id, game_message_full):
         ownGrid = game_message.world.ownershipGrid
         nmap = game_message.world.map.nutrientGrid #Not the other one
         if self.landBase == []:
@@ -23,7 +23,7 @@ class Bot:
                         self.landBase.append((x, y))
                         self.totalPossibleIncome += nmap[x][y]
                         
-            self.landBase.sort(key=lambda pos: abs(pos[0] - initSpawn.x) + abs(pos[1] - initSpawn.y))
+            self.landBase.sort(key=lambda pos: a_star((initSpawn.x, initSpawn.y), pos, ownership_grid, my_team_id, game_message_full) or float('inf'))
             
         for n in self.landBase:
             if ownGrid[n[0]][n[1]] == team_id:
@@ -51,7 +51,7 @@ class Bot:
 
         elif len(my_team.spawners) > 0:
             
-            nextPos = self.getNextLandToCapture(game_message, my_team.teamId, my_team)
+            nextPos = self.getNextLandToCapture(game_message, my_team.teamId, my_team, game_message.world.ownershipGrid, my_team.teamId, game_message)
             
             if my_team.nutrients >= 10:
                 actions.append(SpawnerProduceSporeAction(spawnerId=my_team.spawners[0].id, biomass=10))
@@ -69,15 +69,16 @@ class Bot:
                         ))
             else:
                 print("Boros energy moment")
-                for spore in my_team.spores:
-                    target_spawner = get_cheapest_spawner(spore, game_message.world.spawners, game_message.world.ownershipGrid, my_team.teamId, "NEUTRAL")
+                if my_team.spores:
+                    target_spawner = get_cheapest_spawner(my_team.spores[0], game_message.world.spawners, game_message.world.ownershipGrid, my_team.teamId, game_message)
                     if target_spawner:
-                        actions.append(
-                            SporeMoveToAction(
-                                sporeId=spore.id,
-                                position=target_spawner.position,
+                        for spore in my_team.spores:
+                            actions.append(
+                                SporeMoveToAction(
+                                    sporeId=spore.id,
+                                    position=target_spawner.position,
+                                )
                             )
-                        )
         return actions
 
 def get_closest_spawner(spore: Spore, spawners: list[Spawner]) -> Spawner:
@@ -121,35 +122,35 @@ def get_neighbors(pos, grid_width, grid_height):
     return neighbors
 
 
-def manhattan(a, b):
-    return abs(a[0] - b[0]) + abs(a[1] - b[1])
-
-
-def a_star(start, goal, grid, my_team_id, neutral_id):
+def a_star(start, goal, grid, my_team_id, game_message):
     from heapq import heappop, heappush
     open_set = []
-    heappush(open_set, (manhattan(start, goal), start))
+    heappush(open_set, (0, start))  # Pas d'heuristique, utilise Dijkstra pour le chemin le moins coûteux
     came_from = {}
     g_score = {start: 0}
-    f_score = {start: manhattan(start, goal)}
+    closed = set()
     while open_set:
         _, current = heappop(open_set)
+        if current in closed:
+            continue
+        closed.add(current)
         if current == goal:
             return g_score[current]
         for neighbor in get_neighbors(current, len(grid[0]), len(grid)):
+            if neighbor in closed:
+                continue
             nx, ny = neighbor
             owner = grid[ny][nx]
-            cost = 1 if owner == my_team_id or owner == neutral_id else 3  # murs traversables mais plus coûteux
+            cost = 1 if owner == my_team_id else game_message.world.biomassGrid[ny][nx]  # murs traversables mais plus coûteux
             tentative_g = g_score[current] + cost
             if tentative_g < g_score.get(neighbor, float('inf')):
                 came_from[neighbor] = current
                 g_score[neighbor] = tentative_g
-                f_score[neighbor] = tentative_g + manhattan(neighbor, goal)
-                heappush(open_set, (f_score[neighbor], neighbor))
+                heappush(open_set, (tentative_g, neighbor))  # Pas d'heuristique
     return None
 
 
-def get_cheapest_spawner(spore, spawners, ownership_grid, my_team_id, neutral_id):
+def get_cheapest_spawner(spore, spawners, ownership_grid, my_team_id, game_message):
     cheapest_spawner = None
     cheapest_cost = float('inf')
     start = (spore.position.x, spore.position.y)
@@ -157,7 +158,7 @@ def get_cheapest_spawner(spore, spawners, ownership_grid, my_team_id, neutral_id
         if spawner.teamId == my_team_id:
             continue
         goal = (spawner.position.x, spawner.position.y)
-        cost = a_star(start, goal, ownership_grid, my_team_id, neutral_id)
+        cost = a_star(start, goal, ownership_grid, my_team_id, game_message)
         if cost is not None and cost < cheapest_cost:
             cheapest_cost = cost
             cheapest_spawner = spawner
