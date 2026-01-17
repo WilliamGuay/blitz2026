@@ -17,7 +17,6 @@ class Bot:
             actions.append(SporeCreateSpawnerAction(sporeId=my_team.spores[0].id))
 
         elif len(my_team.spores) == 0:
-            print("No spores left, producing one.")
             actions.append(
                 SpawnerProduceSporeAction(spawnerId=my_team.spawners[0].id, biomass=20)
             )
