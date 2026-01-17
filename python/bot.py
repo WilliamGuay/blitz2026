@@ -23,7 +23,7 @@ class Bot:
                         self.landBase.append((x, y))
                         self.totalPossibleIncome += nmap[x][y]
                         
-            self.landBase.sort(key=lambda pos: len(a_star((my_team.spawners[0].position.x, my_team.spawners[0].position.y), pos, ownership_grid, my_team_id, game_message_full)) if a_star((my_team.spawners[0].position.x, my_team.spawners[0].position.y), pos, ownership_grid, my_team_id, game_message_full) else float('inf'))
+            self.landBase.sort(key=lambda pos: ((pos[0] - my_team.spawners[0].position.x)**2 + (pos[1] - my_team.spawners[0].position.y)**2)**0.5)
             
         for n in self.landBase:
             if ownGrid[n[0]][n[1]] == team_id:
@@ -57,7 +57,7 @@ class Bot:
                 actions.append(SpawnerProduceSporeAction(spawnerId=my_team.spawners[0].id, biomass=10))
             
             print(self.currentProd, self.totalPossibleIncome / 3)
-            if self.currentProd < self.totalPossibleIncome / 3:
+            if self.currentProd < self.totalPossibleIncome / 4:
                 print("building economy")
                 for spore in my_team.spores:
                     if nextPos == (-1, -1):
@@ -85,32 +85,24 @@ class Bot:
             else:
                 print("Boros energy moment")
                 target_spawner = get_cheapest_spawner(my_team.spores[0], game_message.world.spawners, game_message.world.ownershipGrid, my_team.teamId, game_message)
-                for spore in my_team.spores:
+                if target_spawner:
                     target_pos = (target_spawner.position.x, target_spawner.position.y)
-                    print(f"Attack: computing A* from {(spore.position.x, spore.position.y)} to {target_pos}")
-                    path = a_star((spore.position.x, spore.position.y), target_pos, game_message.world.ownershipGrid, my_team.teamId, game_message)
-                    print(f"Attack: path = {path}")
+                    path = a_star((my_team.spores[0].position.x, my_team.spores[0].position.y), target_pos, game_message.world.ownershipGrid, my_team.teamId, game_message)
                     if path and len(path) > 1:
                         next_pos = path[1]
-                        print(f"Attack: next_pos = {next_pos}, target_pos = {target_pos}")
-                        if next_pos != target_pos:
-                            dx = next_pos[0] - spore.position.x
-                            dy = next_pos[1] - spore.position.y
-                            
-                            dx = dx / (abs(dx) if dx != 0 else 1)
-                            dy = dy / (abs(dy) if dy != 0 else 1)
-                            
-                            if dx != 0 and dy != 0:
-                                dy = 0
-                            print(f"Attack: moving {spore.id} with direction ({dx}, {dy})")
+                        dx = next_pos[0] - my_team.spores[0].position.x
+                        dy = next_pos[1] - my_team.spores[0].position.y
+                        
+                        dx = dx / (abs(dx) if dx != 0 else 1)
+                        dy = dy / (abs(dy) if dy != 0 else 1)
+                        
+                        if dx != 0 and dy != 0:
+                            dy = 0
+                        for spore in my_team.spores:
                             actions.append(SporeMoveAction(
                                 sporeId=spore.id,
                                 direction=Position(dx, dy)
                             ))
-                        else:
-                            print(f"Attack: next_pos equals target_pos, not moving")
-                    else:
-                        print(f"Attack: path is None, too short, or iteration limit hit")
         return actions
 
 def get_closest_spawner(spore: Spore, spawners: list[Spawner]) -> Spawner:
@@ -142,7 +134,10 @@ def a_star(start, goal, grid, my_team_id, game_message):
     came_from = {}
     g_score = {start: 0}
     closed = set()
-    while open_set:
+    iterations = 0
+    max_iterations = 1000
+    while open_set and iterations < max_iterations:
+        iterations += 1
         _, current = heappop(open_set)
         if current in closed:
             continue
