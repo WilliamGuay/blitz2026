@@ -10,11 +10,12 @@ class Bot:
         self.targetNutrients = []
         self.totalPossibleIncome = 0
         self.InitialSpawnPos = (-1, -1)
+        self.currentProd = 0
         
     def getNextLandToCapture(self, game_message, team_id, my_team):
         ownGrid = game_message.world.ownershipGrid
+        nmap = game_message.world.map.nutrientGrid #Not the other one
         if self.landBase == []:
-            nmap = game_message.world.map.nutrientGrid #Not the other one
             initSpawn = my_team.spawners[0].position
             for x in range(len(nmap)):
                 for y in range(len(nmap[x])):
@@ -25,12 +26,17 @@ class Bot:
             self.landBase.sort(key=lambda pos: abs(pos[0] - initSpawn.x) + abs(pos[1] - initSpawn.y))
             
         for n in self.landBase:
+            if ownGrid[n[0]][n[1]] == team_id:
+                self.currentProd += nmap[n[0]][n[1]]
+            
+        for n in self.landBase:
             if ownGrid[n[0]][n[1]] != team_id:
                 return n
         
         return (-1, -1)
 
     def get_next_move(self, game_message: TeamGameState) -> list[Action]:
+        self.currentProd = 0
         actions = []
         my_team: TeamInfo = game_message.world.teamInfos[game_message.yourTeamId]
 
@@ -45,23 +51,25 @@ class Bot:
 
         elif len(my_team.spawners) > 0:
             
+            nextPos = self.getNextLandToCapture(game_message, my_team.teamId, my_team)
             
             if my_team.nutrients >= 10:
                 actions.append(SpawnerProduceSporeAction(spawnerId=my_team.spawners[0].id, biomass=10))
             
-            for spore in my_team.spores[:1]:
-                nextPos = self.getNextLandToCapture(game_message, my_team.teamId, my_team)
-                if nextPos == (-1, -1):
-                    pass
-                else:
-                    actions.append(SporeMoveToAction(
-                        sporeId=spore.id,
-                        position=get_direct_move(spore, Position(nextPos[0], nextPos[1]))
-                    ))
-                
-            for spore in my_team.spores[1:]:
-                if spore.biomass > 2:
-                    
+            print(self.currentProd, self.totalPossibleIncome / 3)
+            if self.currentProd < self.totalPossibleIncome / 3:
+                print("building economy")
+                for spore in my_team.spores:
+                    if nextPos == (-1, -1):
+                        pass
+                    else:
+                        actions.append(SporeMoveToAction(
+                            sporeId=spore.id,
+                            position=get_direct_move(spore, Position(nextPos[0], nextPos[1]))
+                        ))
+            else:
+                print("Boros energy moment")
+                for spore in my_team.spores:
                     actions.append(
                         SporeMoveToAction(
                             sporeId=spore.id,
