@@ -63,7 +63,10 @@ class Bot:
                     if nextPos == (-1, -1):
                         pass
                     else:
-                        path = a_star((spore.position.x, spore.position.y), nextPos, game_message.world.ownershipGrid, my_team.teamId, game_message)
+                        path = a_star((spore.position.x, spore.position.y), nextPos, game_message.world.ownershipGrid, my_team.teamId, game_message, avoid_bushes=True)
+                        # Dernier recours : traverser les buissons si aucun chemin n'existe
+                        if not path:
+                            path = a_star((spore.position.x, spore.position.y), nextPos, game_message.world.ownershipGrid, my_team.teamId, game_message, avoid_bushes=False)
                         if path and len(path) > 1:
                             next_pos = path[1] 
                             print("nextPos:", nextPos)
@@ -87,7 +90,10 @@ class Bot:
                 target_spawner = get_cheapest_spawner(my_team.spores[0], game_message.world.spawners, game_message.world.ownershipGrid, my_team.teamId, game_message)
                 if target_spawner:
                     target_pos = (target_spawner.position.x, target_spawner.position.y)
-                    path = a_star((my_team.spores[0].position.x, my_team.spores[0].position.y), target_pos, game_message.world.ownershipGrid, my_team.teamId, game_message)
+                    path = a_star((my_team.spores[0].position.x, my_team.spores[0].position.y), target_pos, game_message.world.ownershipGrid, my_team.teamId, game_message, avoid_bushes=True)
+                    # Dernier recours : traverser les buissons si aucun chemin n'existe
+                    if not path:
+                        path = a_star((my_team.spores[0].position.x, my_team.spores[0].position.y), target_pos, game_message.world.ownershipGrid, my_team.teamId, game_message, avoid_bushes=False)
                     if path and len(path) > 1:
                         next_pos = path[1]
                         dx = next_pos[0] - my_team.spores[0].position.x
@@ -128,7 +134,7 @@ def get_neighbors(pos, grid_width, grid_height):
     return neighbors
 
 
-def a_star(start, goal, grid, my_team_id, game_message):
+def a_star(start, goal, grid, my_team_id, game_message, avoid_bushes=True):
     open_set = []
     heappush(open_set, (0, start))
     came_from = {}
@@ -154,10 +160,17 @@ def a_star(start, goal, grid, my_team_id, game_message):
                 continue
             nx, ny = neighbor
             owner = grid[nx][ny]
+            biomass = game_message.world.biomassGrid[nx][ny]
+            
             if owner == my_team_id:
                 cost = 1
             else:
-                cost = game_message.world.biomassGrid[nx][ny] + 1
+                # Si on doit éviter les buissons, appliquer une très forte pénalité
+                if avoid_bushes and biomass > 0:
+                    cost = 1000 + biomass  # Très coûteux mais pas infini pour dernier recours
+                else:
+                    cost = biomass + 1
+            
             tentative_g = g_score[current] + cost
             if tentative_g < g_score.get(neighbor, float('inf')):
                 came_from[neighbor] = current
@@ -174,7 +187,12 @@ def get_cheapest_spawner(spore, spawners, ownership_grid, my_team_id, game_messa
         if spawner.teamId == my_team_id:
             continue
         goal = (spawner.position.x, spawner.position.y)
-        path = a_star(start, goal, ownership_grid, my_team_id, game_message)
+        # D'abord, essayer d'éviter les buissons
+        path = a_star(start, goal, ownership_grid, my_team_id, game_message, avoid_bushes=True)
+        # Dernier recours : traverser les buissons si aucun chemin n'existe
+        if not path:
+            path = a_star(start, goal, ownership_grid, my_team_id, game_message, avoid_bushes=False)
+        
         if path is not None:
             cost = len(path)
             if cost < cheapest_cost:
