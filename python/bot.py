@@ -1,5 +1,7 @@
 import random
 from game_message import *
+from heapq import heappop, heappush
+
 
 ROLES = []
 
@@ -9,21 +11,19 @@ class Bot:
         self.landBase = []      
         self.targetNutrients = []
         self.totalPossibleIncome = 0
-        self.InitialSpawnPos = (-1, -1)
         self.currentProd = 0
         
     def getNextLandToCapture(self, game_message, team_id, my_team, ownership_grid, my_team_id, game_message_full):
         ownGrid = game_message.world.ownershipGrid
         nmap = game_message.world.map.nutrientGrid #Not the other one
         if self.landBase == []:
-            initSpawn = my_team.spawners[0].position
             for x in range(len(nmap)):
                 for y in range(len(nmap[x])):
                     if nmap[x][y] > 0:
                         self.landBase.append((x, y))
                         self.totalPossibleIncome += nmap[x][y]
                         
-            self.landBase.sort(key=lambda pos: a_star((initSpawn.x, initSpawn.y), pos, ownership_grid, my_team_id, game_message_full) or float('inf'))
+            self.landBase.sort(key=lambda pos: len(a_star((my_team.spawners[0].position.x, my_team.spawners[0].position.y), pos, ownership_grid, my_team_id, game_message_full)) if a_star((my_team.spawners[0].position.x, my_team.spawners[0].position.y), pos, ownership_grid, my_team_id, game_message_full) else float('inf'))
             
         for n in self.landBase:
             if ownGrid[n[0]][n[1]] == team_id:
@@ -63,22 +63,41 @@ class Bot:
                     if nextPos == (-1, -1):
                         pass
                     else:
-                        actions.append(SporeMoveToAction(
-                            sporeId=spore.id,
-                            position=Position(nextPos[0], nextPos[1])
-                        ))
+                        path = a_star((spore.position.x, spore.position.y), nextPos, game_message.world.ownershipGrid, my_team.teamId, game_message)
+                        if path and len(path) > 1:
+                            next_pos = path[1] 
+                            print("nextPos:", nextPos)
+                            print("pos: ", spore.position)
+                            dx = next_pos[0] - spore.position.x
+                            dy = next_pos[1] - spore.position.y
+                            
+                            dx = dx / (abs(dx) if dx != 0 else 1)
+                            dy = dy / (abs(dy) if dy != 0 else 1)
+                            
+                            if dx != 0 and dy != 0:
+                                dy = 0
+                            
+                            print("next move: ", (dx, dy))
+                            actions.append(SporeMoveAction(
+                                sporeId=spore.id,
+                                direction=Position(dx, dy)
+                            ))
             else:
                 print("Boros energy moment")
                 if my_team.spores:
                     target_spawner = get_cheapest_spawner(my_team.spores[0], game_message.world.spawners, game_message.world.ownershipGrid, my_team.teamId, game_message)
                     if target_spawner:
                         for spore in my_team.spores:
-                            actions.append(
-                                SporeMoveToAction(
-                                    sporeId=spore.id,
-                                    position=target_spawner.position,
-                                )
-                            )
+                            path = a_star((spore.position.x, spore.position.y), (target_spawner.position.x, target_spawner.position.y), game_message.world.ownershipGrid, my_team.teamId, game_message)
+                            if path and len(path) > 1:
+                                next_pos = path[1]
+                                if next_pos != (target_spawner.position.x, target_spawner.position.y):
+                                    dx = next_pos[0] - spore.position.x
+                                    dy = next_pos[1] - spore.position.y
+                                    actions.append(SporeMoveAction(
+                                        sporeId=spore.id,
+                                        direction=Position(dx, dy)
+                                    ))
         return actions
 
 def get_closest_spawner(spore: Spore, spawners: list[Spawner]) -> Spawner:
@@ -93,24 +112,6 @@ def get_closest_spawner(spore: Spore, spawners: list[Spawner]) -> Spawner:
             closest_spawner = spawner
     return closest_spawner
 
-def get_direct_move(spore: Spore, destination: Position) -> Position:
-    if destination is None:
-        return spore.position
-    
-    dx = destination.x - spore.position.x
-    dy = destination.y - spore.position.y
-    
-    if dx == 0 and dy == 0:
-        return destination
-    
-    step_x = (1 if dx > 0 else -1) if abs(dx) >= abs(dy) else 0
-    step_y = (1 if dy > 0 else -1) if abs(dy) > abs(dx) else 0
-    return Position(
-        x=spore.position.x + step_x,
-        y=spore.position.y + step_y,
-    )
-
-
 def get_neighbors(pos, grid_width, grid_height):
     x, y = pos
     directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
@@ -123,9 +124,8 @@ def get_neighbors(pos, grid_width, grid_height):
 
 
 def a_star(start, goal, grid, my_team_id, game_message):
-    from heapq import heappop, heappush
     open_set = []
-    heappush(open_set, (0, start))  # Pas d'heuristique, utilise Dijkstra pour le chemin le moins coûteux
+    heappush(open_set, (0, start))
     came_from = {}
     g_score = {start: 0}
     closed = set()
@@ -135,18 +135,26 @@ def a_star(start, goal, grid, my_team_id, game_message):
             continue
         closed.add(current)
         if current == goal:
-            return g_score[current]
+            path = [goal]
+            while current in came_from:
+                path.append(current)
+                current = came_from[current]
+            path.reverse()
+            return path
         for neighbor in get_neighbors(current, len(grid[0]), len(grid)):
             if neighbor in closed:
                 continue
             nx, ny = neighbor
-            owner = grid[ny][nx]
-            cost = 1 if owner == my_team_id else game_message.world.biomassGrid[ny][nx]  # murs traversables mais plus coûteux
+            owner = grid[nx][ny]
+            if owner == my_team_id:
+                cost = 1
+            else:
+                cost = game_message.world.biomassGrid[nx][ny] + 1
             tentative_g = g_score[current] + cost
             if tentative_g < g_score.get(neighbor, float('inf')):
                 came_from[neighbor] = current
                 g_score[neighbor] = tentative_g
-                heappush(open_set, (tentative_g, neighbor))  # Pas d'heuristique
+                heappush(open_set, (tentative_g, neighbor))
     return None
 
 
@@ -158,8 +166,10 @@ def get_cheapest_spawner(spore, spawners, ownership_grid, my_team_id, game_messa
         if spawner.teamId == my_team_id:
             continue
         goal = (spawner.position.x, spawner.position.y)
-        cost = a_star(start, goal, ownership_grid, my_team_id, game_message)
-        if cost is not None and cost < cheapest_cost:
-            cheapest_cost = cost
-            cheapest_spawner = spawner
+        path = a_star(start, goal, ownership_grid, my_team_id, game_message)
+        if path is not None:
+            cost = len(path)
+            if cost < cheapest_cost:
+                cheapest_cost = cost
+                cheapest_spawner = spawner
     return cheapest_spawner
