@@ -43,14 +43,17 @@ class Bot:
 
         if len(my_team.spawners) == 0:
             actions.append(SporeCreateSpawnerAction(sporeId=my_team.spores[0].id))
+            
+        if my_team.nutrients >= 20:
+            actions.append(
+                SpawnerProduceSporeAction(spawnerId=my_team.spawners[0].id, biomass=20)
+            )
 
         elif len(my_team.spawners) > 0:
             
             nextPos = self.getNextLandToCapture(game_message, my_team.teamId, my_team, game_message.world.ownershipGrid, my_team.teamId, game_message)
             
-            if my_team.nutrients >= 20:
-                actions.append(SpawnerProduceSporeAction(spawnerId=my_team.spawners[0].id, biomass=20))
-            elif my_team.nutrients >= 10:
+            if my_team.nutrients >= 10:
                 actions.append(SpawnerProduceSporeAction(spawnerId=my_team.spawners[0].id, biomass=10))
             
             print(self.currentProd, self.totalPossibleIncome / 3)
@@ -85,9 +88,7 @@ class Bot:
                     target_spawner = get_cheapest_spawner(my_team.spores[0], game_message.world.spawners, game_message.world.ownershipGrid, my_team.teamId, game_message)
                     if target_spawner:
                         for spore in my_team.spores:
-                            print(f"Computing A* from {(spore.position.x, spore.position.y)} to {(target_spawner.position.x, target_spawner.position.y)}")
                             path = a_star((spore.position.x, spore.position.y), (target_spawner.position.x, target_spawner.position.y), game_message.world.ownershipGrid, my_team.teamId, game_message)
-                            print(f"Path result: {path}")
                             if path and len(path) > 1:
                                 next_pos = path[1]
                                 if next_pos != (target_spawner.position.x, target_spawner.position.y):
@@ -99,6 +100,7 @@ class Bot:
                                     
                                     if dx != 0 and dy != 0:
                                         dy = 0
+                                        
                                     actions.append(SporeMoveAction(
                                         sporeId=spore.id,
                                         direction=Position(dx, dy)
@@ -134,10 +136,7 @@ def a_star(start, goal, grid, my_team_id, game_message):
     came_from = {}
     g_score = {start: 0}
     closed = set()
-    iterations = 0
-    max_iterations = 5000  # Limite pour éviter les boucles infinies
-    while open_set and iterations < max_iterations:
-        iterations += 1
+    while open_set:
         _, current = heappop(open_set)
         if current in closed:
             continue
@@ -163,9 +162,6 @@ def a_star(start, goal, grid, my_team_id, game_message):
                 came_from[neighbor] = current
                 g_score[neighbor] = tentative_g
                 heappush(open_set, (tentative_g, neighbor))
-    
-    if iterations >= max_iterations:
-        print(f"A* hit max iterations ({max_iterations}) looking for {goal}")
     return None
 
 
