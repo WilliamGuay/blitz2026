@@ -27,13 +27,11 @@ class Bot:
                 
             for spore in my_team.spores:
                 if spore.biomass > 2:
-                    target_spawner = get_closest_spawner(spore, game_message.world.spawners)
-                    if target_spawner is None:
-                        continue
+                    
                     actions.append(
                         SporeMoveToAction(
                             sporeId=spore.id,
-                            position=get_direct_move(spore, target_spawner.position),
+                            position=get_direct_move(spore, get_closest_spawner(spore, game_message.world.spawners).position),
                         )
                     )
         return actions
