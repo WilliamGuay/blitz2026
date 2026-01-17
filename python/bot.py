@@ -65,7 +65,7 @@ class Bot:
                     else:
                         actions.append(SporeMoveToAction(
                             sporeId=spore.id,
-                            position=get_direct_move(spore, Position(nextPos[0], nextPos[1]))
+                            position=Position(nextPos[0], nextPos[1])
                         ))
             else:
                 print("Boros energy moment")
@@ -73,7 +73,7 @@ class Bot:
                     actions.append(
                         SporeMoveToAction(
                             sporeId=spore.id,
-                            position=get_direct_move(spore, get_closest_spawner(spore, game_message.world.spawners)),
+                            position=get_closest_spawner(spore, game_message.world.spawners).position,
                         )
                     )
         return actions
