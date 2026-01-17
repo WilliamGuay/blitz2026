@@ -84,27 +84,33 @@ class Bot:
                             ))
             else:
                 print("Boros energy moment")
-                if my_team.spores:
-                    target_spawner = get_cheapest_spawner(my_team.spores[0], game_message.world.spawners, game_message.world.ownershipGrid, my_team.teamId, game_message)
-                    if target_spawner:
-                        for spore in my_team.spores:
-                            path = a_star((spore.position.x, spore.position.y), (target_spawner.position.x, target_spawner.position.y), game_message.world.ownershipGrid, my_team.teamId, game_message)
-                            if path and len(path) > 1:
-                                next_pos = path[1]
-                                if next_pos != (target_spawner.position.x, target_spawner.position.y):
-                                    dx = next_pos[0] - spore.position.x
-                                    dy = next_pos[1] - spore.position.y
-                                    
-                                    dx = dx / (abs(dx) if dx != 0 else 1)
-                                    dy = dy / (abs(dy) if dy != 0 else 1)
-                                    
-                                    if dx != 0 and dy != 0:
-                                        dy = 0
-                                        
-                                    actions.append(SporeMoveAction(
-                                        sporeId=spore.id,
-                                        direction=Position(dx, dy)
-                                    ))
+                target_spawner = get_cheapest_spawner(my_team.spores[0], game_message.world.spawners, game_message.world.ownershipGrid, my_team.teamId, game_message)
+                for spore in my_team.spores:
+                    target_pos = (target_spawner.position.x, target_spawner.position.y)
+                    print(f"Attack: computing A* from {(spore.position.x, spore.position.y)} to {target_pos}")
+                    path = a_star((spore.position.x, spore.position.y), target_pos, game_message.world.ownershipGrid, my_team.teamId, game_message)
+                    print(f"Attack: path = {path}")
+                    if path and len(path) > 1:
+                        next_pos = path[1]
+                        print(f"Attack: next_pos = {next_pos}, target_pos = {target_pos}")
+                        if next_pos != target_pos:
+                            dx = next_pos[0] - spore.position.x
+                            dy = next_pos[1] - spore.position.y
+                            
+                            dx = dx / (abs(dx) if dx != 0 else 1)
+                            dy = dy / (abs(dy) if dy != 0 else 1)
+                            
+                            if dx != 0 and dy != 0:
+                                dy = 0
+                            print(f"Attack: moving {spore.id} with direction ({dx}, {dy})")
+                            actions.append(SporeMoveAction(
+                                sporeId=spore.id,
+                                direction=Position(dx, dy)
+                            ))
+                        else:
+                            print(f"Attack: next_pos equals target_pos, not moving")
+                    else:
+                        print(f"Attack: path is None, too short, or iteration limit hit")
         return actions
 
 def get_closest_spawner(spore: Spore, spawners: list[Spawner]) -> Spawner:
