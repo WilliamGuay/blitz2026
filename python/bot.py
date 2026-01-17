@@ -91,6 +91,9 @@ class Bot:
                             if path and len(path) > 1:
                                 next_pos = path[1]
                                 if next_pos != (target_spawner.position.x, target_spawner.position.y):
+                                    dx = next_pos[0] - spore.position.x
+                                    dy = next_pos[1] - spore.position.y
+                                    
                                     dx = dx / (abs(dx) if dx != 0 else 1)
                                     dy = dy / (abs(dy) if dy != 0 else 1)
                                     
