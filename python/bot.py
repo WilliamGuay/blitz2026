@@ -23,7 +23,7 @@ class Bot:
 
         else:
             if my_team.nutrients >= 10:
-                actions.append(SpawnerProduceSporeAction(spawnerId=my_team.spawners[0].id, biomass=5))
+                actions.append(SpawnerProduceSporeAction(spawnerId=my_team.spawners[0].id, biomass=10))
                 
             for spore in my_team.spores:
                 if spore.biomass > 2:
