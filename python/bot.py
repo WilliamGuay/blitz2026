@@ -16,24 +16,53 @@ class Bot:
         if len(my_team.spawners) == 0:
             actions.append(SporeCreateSpawnerAction(sporeId=my_team.spores[0].id))
 
-        elif len(my_team.spores) == 0:
+        elif len(my_team.spores) == 0 and my_team.nutrients >= 20:
             actions.append(
                 SpawnerProduceSporeAction(spawnerId=my_team.spawners[0].id, biomass=20)
             )
 
         else:
             if my_team.nutrients >= 10:
-                actions.append(SpawnerProduceSporeAction(spawnerId=my_team.spawners[0].id, biomass=10))
+                actions.append(SpawnerProduceSporeAction(spawnerId=my_team.spawners[0].id, biomass=5))
                 
             for spore in my_team.spores:
                 if spore.biomass > 2:
-                    for spawner in game_message.world.spawners:
-                        if spawner.teamId != game_message.yourTeamId:
-                            actions.append(
-                                SporeMoveToAction(
-                                    sporeId=spore.id,
-                                    position=spawner.position,
-                                )
-                            )
-                            break
+                    target_spawner = get_closest_spawner(spore, game_message.world.spawners)
+                    if target_spawner is None:
+                        continue
+                    actions.append(
+                        SporeMoveToAction(
+                            sporeId=spore.id,
+                            position=get_direct_move(spore, target_spawner.position),
+                        )
+                    )
         return actions
+
+def get_closest_spawner(spore: Spore, spawners: list[Spawner]) -> Spawner:
+    closest_spawner = None
+    closest_distance = float('inf')
+    for spawner in spawners:
+        if spawner.teamId == spore.teamId:
+            continue
+        distance = ((spore.position.x - spawner.position.x) ** 2 + (spore.position.y - spawner.position.y) ** 2) ** 0.5
+        if distance < closest_distance:
+            closest_distance = distance
+            closest_spawner = spawner
+    return closest_spawner
+
+def get_direct_move(spore: Spore, destination: Position) -> Position:
+    if destination is None:
+        return spore.position
+    
+    dx = destination.x - spore.position.x
+    dy = destination.y - spore.position.y
+    
+    if dx == 0 and dy == 0:
+        return destination
+    
+    step_x = (1 if dx > 0 else -1) if abs(dx) >= abs(dy) else 0
+    step_y = (1 if dy > 0 else -1) if abs(dy) > abs(dx) else 0
+    return Position(
+        x=spore.position.x + step_x,
+        y=spore.position.y + step_y,
+    )
