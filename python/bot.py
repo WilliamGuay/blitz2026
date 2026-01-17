@@ -17,20 +17,24 @@ class Bot:
             actions.append(SporeCreateSpawnerAction(sporeId=my_team.spores[0].id))
 
         elif len(my_team.spores) == 0:
+            print("No spores left, producing one.")
             actions.append(
                 SpawnerProduceSporeAction(spawnerId=my_team.spawners[0].id, biomass=20)
             )
 
         else:
-            actions.append(
-                SporeMoveToAction(
-                    sporeId=my_team.spores[0].id,
-                    position=Position(
-                        x=random.randint(0, game_message.world.map.width - 1),
-                        y=random.randint(0, game_message.world.map.height - 1),
-                    ),
-                )
-            )
-
-        # You can clearly do better than the random actions above. Have fun!!
+            if my_team.nutrients >= 10:
+                actions.append(SpawnerProduceSporeAction(spawnerId=my_team.spawners[0].id, biomass=10))
+                
+            for spore in my_team.spores:
+                if spore.biomass > 2:
+                    for spawner in game_message.world.spawners:
+                        if spawner.teamId != game_message.yourTeamId:
+                            actions.append(
+                                SporeMoveToAction(
+                                    sporeId=spore.id,
+                                    position=spawner.position,
+                                )
+                            )
+                            break
         return actions
