@@ -43,17 +43,14 @@ class Bot:
 
         if len(my_team.spawners) == 0:
             actions.append(SporeCreateSpawnerAction(sporeId=my_team.spores[0].id))
-            
-        if my_team.nutrients >= 20:
-            actions.append(
-                SpawnerProduceSporeAction(spawnerId=my_team.spawners[0].id, biomass=20)
-            )
 
         elif len(my_team.spawners) > 0:
             
             nextPos = self.getNextLandToCapture(game_message, my_team.teamId, my_team, game_message.world.ownershipGrid, my_team.teamId, game_message)
             
-            if my_team.nutrients >= 10:
+            if my_team.nutrients >= 20:
+                actions.append(SpawnerProduceSporeAction(spawnerId=my_team.spawners[0].id, biomass=20))
+            elif my_team.nutrients >= 10:
                 actions.append(SpawnerProduceSporeAction(spawnerId=my_team.spawners[0].id, biomass=10))
             
             print(self.currentProd, self.totalPossibleIncome / 3)
