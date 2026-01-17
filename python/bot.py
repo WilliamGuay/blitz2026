@@ -70,12 +70,14 @@ class Bot:
             else:
                 print("Boros energy moment")
                 for spore in my_team.spores:
-                    actions.append(
-                        SporeMoveToAction(
-                            sporeId=spore.id,
-                            position=get_closest_spawner(spore, game_message.world.spawners).position,
+                    target_spawner = get_cheapest_spawner(spore, game_message.world.spawners, game_message.world.ownershipGrid, my_team.teamId, "NEUTRAL")
+                    if target_spawner:
+                        actions.append(
+                            SporeMoveToAction(
+                                sporeId=spore.id,
+                                position=target_spawner.position,
+                            )
                         )
-                    )
         return actions
 
 def get_closest_spawner(spore: Spore, spawners: list[Spawner]) -> Spawner:
@@ -106,3 +108,57 @@ def get_direct_move(spore: Spore, destination: Position) -> Position:
         x=spore.position.x + step_x,
         y=spore.position.y + step_y,
     )
+
+
+def get_neighbors(pos, grid_width, grid_height):
+    x, y = pos
+    directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    neighbors = []
+    for dx, dy in directions:
+        nx, ny = x + dx, y + dy
+        if 0 <= nx < grid_width and 0 <= ny < grid_height:
+            neighbors.append((nx, ny))
+    return neighbors
+
+
+def manhattan(a, b):
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+
+def a_star(start, goal, grid, my_team_id, neutral_id):
+    from heapq import heappop, heappush
+    open_set = []
+    heappush(open_set, (manhattan(start, goal), start))
+    came_from = {}
+    g_score = {start: 0}
+    f_score = {start: manhattan(start, goal)}
+    while open_set:
+        _, current = heappop(open_set)
+        if current == goal:
+            return g_score[current]
+        for neighbor in get_neighbors(current, len(grid[0]), len(grid)):
+            nx, ny = neighbor
+            owner = grid[ny][nx]
+            cost = 1 if owner == my_team_id or owner == neutral_id else 3  # murs traversables mais plus coûteux
+            tentative_g = g_score[current] + cost
+            if tentative_g < g_score.get(neighbor, float('inf')):
+                came_from[neighbor] = current
+                g_score[neighbor] = tentative_g
+                f_score[neighbor] = tentative_g + manhattan(neighbor, goal)
+                heappush(open_set, (f_score[neighbor], neighbor))
+    return None
+
+
+def get_cheapest_spawner(spore, spawners, ownership_grid, my_team_id, neutral_id):
+    cheapest_spawner = None
+    cheapest_cost = float('inf')
+    start = (spore.position.x, spore.position.y)
+    for spawner in spawners:
+        if spawner.teamId == my_team_id:
+            continue
+        goal = (spawner.position.x, spawner.position.y)
+        cost = a_star(start, goal, ownership_grid, my_team_id, neutral_id)
+        if cost is not None and cost < cheapest_cost:
+            cheapest_cost = cost
+            cheapest_spawner = spawner
+    return cheapest_spawner
