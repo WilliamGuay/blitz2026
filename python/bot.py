@@ -9,11 +9,23 @@ class Bot:
         self.landBase = []      
         self.targetNutrients = []
         self.totalPossibleIncome = 0
+        self.InitialSpawnPos = (-1, -1)
         
-    def getNextLandToCapture(self, game_message, team_id):
+    def getNextLandToCapture(self, game_message, team_id, my_team):
         ownGrid = game_message.world.ownershipGrid
+        if self.landBase == []:
+            nmap = game_message.world.map.nutrientGrid #Not the other one
+            initSpawn = my_team.spawners[0].position
+            for x in range(len(nmap)):
+                for y in range(len(nmap[x])):
+                    if nmap[x][y] > 0:
+                        self.landBase.append((x, y))
+                        self.totalPossibleIncome += nmap[x][y]
+                        
+            self.landBase.sort(key=lambda pos: abs(pos[0] - initSpawn.x) + abs(pos[1] - initSpawn.y))
+            
         for n in self.landBase:
-            if ownGrid[n[0], n[1]] != team_id:
+            if ownGrid[n[0]][n[1]] != team_id:
                 return n
         
         return (-1, -1)
@@ -25,33 +37,27 @@ class Bot:
 
         if len(my_team.spawners) == 0:
             actions.append(SporeCreateSpawnerAction(sporeId=my_team.spores[0].id))
-
-        if len(self.landBase) == 0 and not len(my_team.spawners) == 0:
-            nmap = game_message.world.map.nutrientGrid #Not the other one
-            initSpawn = my_team.spawners[0].position
-            for x in range(len(nmap)):
-                for y in range(len(nmap[x])):
-                    if nmap[x][y] > 0:
-                        self.landBase.append((x, y))
-                        self.totalPossibleIncome += nmap[x][y]
-                        
-            self.landBase.sort(key=lambda pos: abs(pos[0] - initSpawn.x) + abs(pos[1] - initSpawn.y))
             
-        elif len(my_team.spores) == 0 and my_team.nutrients >= 20:
+        if my_team.nutrients >= 20:
             actions.append(
                 SpawnerProduceSporeAction(spawnerId=my_team.spawners[0].id, biomass=20)
             )
 
-        else:
+        elif len(my_team.spawners) > 0:
             
             
             if my_team.nutrients >= 10:
                 actions.append(SpawnerProduceSporeAction(spawnerId=my_team.spawners[0].id, biomass=10))
-                
+            
             for spore in my_team.spores[:1]:
-                nextPos = self.getNextLandToCapture(game_message, my_team.teamId)
+                nextPos = self.getNextLandToCapture(game_message, my_team.teamId, my_team)
                 if nextPos == (-1, -1):
                     pass
+                else:
+                    actions.append(SporeMoveToAction(
+                        sporeId=spore.id,
+                        position=get_direct_move(spore, Position(nextPos[0], nextPos[1]))
+                    ))
                 
             for spore in my_team.spores[1:]:
                 if spore.biomass > 2:
@@ -59,7 +65,7 @@ class Bot:
                     actions.append(
                         SporeMoveToAction(
                             sporeId=spore.id,
-                            position=get_direct_move(spore, get_closest_spawner(spore, game_message.world.spawners).position),
+                            position=get_direct_move(spore, get_closest_spawner(spore, game_message.world.spawners)),
                         )
                     )
         return actions
